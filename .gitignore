@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+
+frontend/node_modules/
+frontend/dist/
+frontend/*.log
+*.log
+
+data/images/*
+data/reports/*
+outputs/*
+vector_store/*
+frontend-preview.png
+
+!.gitkeep

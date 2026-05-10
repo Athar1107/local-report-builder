@@ -1,0 +1,21 @@
+# Web server
+flask>=3.0.0
+flask-cors>=4.0.0
+
+# Document parsing
+PyMuPDF>=1.23.0
+python-docx>=1.1.0
+
+# Embeddings & vector search
+sentence-transformers>=2.7.0
+faiss-cpu>=1.7.4
+numpy>=1.26.0
+
+# Local LLM inference
+ollama>=0.2.0
+
+# Report output
+python-docx>=1.1.0
+
+# CLI
+rich>=13.7.0
