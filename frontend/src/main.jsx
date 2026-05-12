@@ -39,6 +39,17 @@ const tabs = [
   { id: "library", label: "Library & Assets", icon: Archive },
 ];
 
+/** Same formula as app.py `knowledge_index_pct` when the API omits that field. */
+function knowledgeIndexFromCounts(stats) {
+  const total = stats.total ?? 0;
+  if (total <= 0) return 0;
+  const c = stats.captions ?? 0;
+  const s = stats.sections ?? 0;
+  const sc = Array.isArray(stats.sources) ? stats.sources.length : 0;
+  const raw = 11 * Math.log1p(c) + 9 * Math.log1p(s) + 6.5 * Math.log1p(Math.max(sc, 1));
+  return Math.min(100, Math.round(raw * 10) / 10);
+}
+
 const defaultSections = [
   ["introduction", "Introduction", "Purpose, context, and relevance of the event."],
   ["about_the_speaker", "About the Speaker", "Speaker name, role, expertise, and affiliation."],
@@ -68,37 +79,29 @@ function App() {
     return { label: "Awaiting Index Data", tone: "waiting" };
   }, [stats.total]);
 
-  const accuracyData = useMemo(() => {
-    const baseAcc = 82.5;
-    
-    // Logarithmic growth prevents it from skyrocketing quickly
-    const sectionBonus = stats.sections > 0 ? Math.log10(stats.sections + 1) * 3.5 : 0;
-    const captionBonus = stats.captions > 0 ? Math.log10(stats.captions + 1) * 1.5 : 0;
-    
-    // Target a more realistic upper bound instead of 99.6%
-    const currentAcc = Math.min(96.5, baseAcc + sectionBonus + captionBonus);
-    
-    const data = [];
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    for (let i = 0; i < 7; i++) {
-      let val;
-      if (i === 6) {
-        val = currentAcc;
-      } else {
-        // Create organic-looking historical fluctuations
-        const noise = Math.sin(currentAcc * (i + 1)) * 1.8;
-        // Gradual improvement over the week
-        val = currentAcc - ((6 - i) * 1.2) + noise;
-        
-        if (val < 75) val = 75 + (i * 0.8);
-      }
-      data.push({
-        name: days[i],
-        accuracy: parseFloat(val.toFixed(1))
-      });
+  const knowledgeIndexPct = useMemo(() => {
+    if (typeof stats.knowledge_index_pct === "number" && !Number.isNaN(stats.knowledge_index_pct)) {
+      return stats.knowledge_index_pct;
     }
-    return data;
-  }, [stats.sections, stats.captions]);
+    return knowledgeIndexFromCounts(stats);
+  }, [stats.knowledge_index_pct, stats.total, stats.captions, stats.sections, stats.sources]);
+
+  const accuracyData = useMemo(() => {
+    const clamped = Math.min(100, Math.max(0, knowledgeIndexPct));
+    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    // No time-series is persisted; every point matches the live vector store.
+    return days.map((name) => ({ name, accuracy: Number(clamped.toFixed(1)) }));
+  }, [knowledgeIndexPct]);
+
+  const knowledgeTrend = useMemo(() => {
+    const total = stats.total ?? 0;
+    return total > 0 ? `+${total} chunks` : "+0 chunks";
+  }, [stats.total]);
+
+  const knowledgeIndexDetail =
+    "Knowledge index is a readiness score for your embedded report chunks (not model prediction accuracy). " +
+    "The API uses the same counts as Captions / Sections / Sources: score = min(100, round(11·ln(1+captions) + 9·ln(1+sections) + 6.5·ln(1+sources), 1)), then the UI shows that value. " +
+    "ln is the natural logarithm; an empty store is 0%.";
 
   useEffect(() => {
     refreshStatus();
@@ -254,7 +257,7 @@ function App() {
                     </div>
                   </div>
                 </section>
-                
+
                 <section className="modal-section auth-instructions">
                   <h3>Authentication Setup Instructions</h3>
                   <p>To add a username and password to this application, you need to implement backend authentication. Here is a quick guide:</p>
@@ -276,20 +279,34 @@ function App() {
             <div className="pageTransition">
               <div className="page-header">
                 <h1>AI System Insights</h1>
-                <p>Monitor AI performance, accuracy, and system health</p>
+                <p>Knowledge index and counts come from the vector store; compare with files in data/reports.</p>
               </div>
+
+              {(stats.total ?? 0) === 0 && (
+                <p className="dashboard-hint">
+                  Knowledge index stays at 0% until the vector store has at least one chunk. Use{" "}
+                  <strong>Index Report</strong> to embed a PDF or DOCX; files only sitting in{" "}
+                  <code>data/reports</code> are not counted until they are indexed (saved under{" "}
+                  <code>vector_store/knowledge.pkl</code>).
+                </p>
+              )}
 
               <div className="metrics-grid">
                 <MetricCard title="Captions Generated" value={stats.captions} trend="+12.5%" icon={ImagePlus} />
                 <MetricCard title="Sections Indexed" value={stats.sections} trend="+8.2%" icon={FilePlus2} />
                 <MetricCard title="Total Sources" value={stats.sources?.length || 0} trend="+15.0%" icon={Archive} />
-                <MetricCard title="Model Accuracy" value={`${accuracyData[6].accuracy}%`} trend="+2.1%" icon={Activity} />
+                <MetricCard
+                  title="Knowledge index"
+                  value={`${knowledgeIndexPct.toFixed(1)}%`}
+                  trend={knowledgeTrend}
+                  icon={Activity}
+                />
               </div>
 
               <div className="chart-panel pageTransition" style={{ animationDelay: '0.1s' }}>
                 <div className="panel-heading" style={{ marginBottom: '24px' }}>
                   <Activity size={18} className="heading-icon" />
-                  <h2>Model Accuracy Trend (Report Quality Score)</h2>
+                  <h2>Knowledge index (vector store)</h2>
                 </div>
                 <div className="chart-container" style={{ height: 280, width: '100%' }}>
                   <ResponsiveContainer width="100%" height="100%">
@@ -303,10 +320,10 @@ function App() {
                       <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
                       <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} tickFormatter={(tick) => `${tick}%`} />
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                      <Tooltip 
+                      <Tooltip
                         contentStyle={{ backgroundColor: '#151e32', borderColor: '#1e293b', borderRadius: '8px', color: '#f8fafc' }}
                         itemStyle={{ color: '#93c5fd', fontWeight: 600 }}
-                        formatter={(value) => [`${value}%`, 'Accuracy']}
+                        formatter={(value) => [`${value}%`, "Knowledge index"]}
                       />
                       <Area type="monotone" dataKey="accuracy" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorAccuracy)" />
                     </AreaChart>
@@ -477,7 +494,16 @@ function App() {
 }
 
 function emptyStats() {
-  return { exists: false, total: 0, captions: 0, sections: 0, sources: [] };
+  return {
+    exists: false,
+    path: "",
+    total: 0,
+    captions: 0,
+    sections: 0,
+    sources: [],
+    reports_on_disk: 0,
+    knowledge_index_pct: 0,
+  };
 }
 
 function MetricCard({ title, value, trend, icon: Icon }) {

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -51,6 +52,32 @@ def load_store() -> KnowledgeStore:
     return store
 
 
+def count_report_files_on_disk() -> int:
+    """PDF/DOCX files in data/reports (may exceed what is embedded in the vector store)."""
+    if not REPORTS_DIR.exists():
+        return 0
+    n = 0
+    for path in REPORTS_DIR.iterdir():
+        if path.is_file() and path.suffix.lower() in ALLOWED_REPORTS:
+            n += 1
+    return n
+
+
+def knowledge_index_pct(total: int, captions: int, sections: int, source_count: int) -> float:
+    """
+    0–100 figure from vector-store counts only (not an LLM benchmark).
+    Same inputs as captions / sections / total in /api/status.
+    """
+    if total <= 0:
+        return 0.0
+    raw = (
+        11.0 * math.log1p(captions)
+        + 9.0 * math.log1p(sections)
+        + 6.5 * math.log1p(max(source_count, 1))
+    )
+    return round(min(100.0, raw), 1)
+
+
 def store_stats() -> dict:
     store = load_store()
     sources = []
@@ -61,13 +88,21 @@ def store_stats() -> dict:
             "sections": sum(1 for item in store.metadata if item.get("source") == source and item.get("kind") == "section"),
         })
 
+    captions = store.count("caption")
+    sections = store.count("section")
+    total = len(store)
+    source_count = len(sources)
+    reports_on_disk = count_report_files_on_disk()
+
     return {
         "exists": VECTOR_STORE_PATH.exists(),
         "path": str(VECTOR_STORE_PATH),
-        "total": len(store),
-        "captions": store.count("caption"),
-        "sections": store.count("section"),
+        "total": total,
+        "captions": captions,
+        "sections": sections,
         "sources": sources,
+        "reports_on_disk": reports_on_disk,
+        "knowledge_index_pct": knowledge_index_pct(total, captions, sections, source_count),
     }
 
 
