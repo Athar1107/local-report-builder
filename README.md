@@ -78,11 +78,38 @@ ollama serve              # keep this running
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+# 3. Frontend setup (Node.js required)
+cd frontend
+npm install
+cd ..
 ```
 
 ---
 
-## Usage
+## Running the Web UI (Frontend + Backend)
+
+To use the graphical interface, you need to start both the backend server and the frontend application.
+
+**1. Start the Flask Backend:**
+Open a terminal in the project root:
+```bash
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+python app.py
+```
+*The backend API will run on http://127.0.0.1:5000*
+
+**2. Start the React Frontend:**
+Open a second terminal:
+```bash
+cd frontend
+npm run dev
+```
+*Vite will start the frontend (typically on http://127.0.0.1:5173). Open the provided local URL in your browser.*
+
+---
+
+## CLI Usage
 
 ### Step 1 — Index a previous-year report *(once per report)*
 ```bash
