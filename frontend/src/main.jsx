@@ -16,7 +16,13 @@ import {
   Calendar,
   Bell,
   AlertTriangle,
-  Activity
+  Activity,
+  Database,
+  HardDrive,
+  ServerCog,
+  ShieldCheck,
+  Lock,
+  X
 } from "lucide-react";
 import {
   AreaChart,
@@ -63,8 +69,13 @@ const defaultSections = [
 
 const LAST_WEEK_KNOWLEDGE_INDEX = 87;
 
+const ADMIN_EMAIL    = "local@ieee.org";
+const ADMIN_PASSWORD = "IEEE";
+
 function App() {
   const [showAdminPortal, setShowAdminPortal] = useState(false);
+  const [showAdminLogin, setShowAdminLogin]   = useState(false);
+  const [adminAuthed, setAdminAuthed]         = useState(false);
   const [activeTab, setActiveTab] = useState("home");
   const [status, setStatus] = useState({ stats: emptyStats(), outputs: [], sections: defaultSections });
   const [notice, setNotice] = useState(null);
@@ -104,8 +115,35 @@ function App() {
 
   const knowledgeIndexDetail =
     "Knowledge index is a readiness score for your embedded report chunks (not model prediction accuracy). " +
-    "The API uses the same counts as Captions / Sections / Sources: score = min(100, round(11·ln(1+captions) + 9·ln(1+sections) + 6.5·ln(1+sources), 1)), then the UI shows that value. " +
+    "The API uses the same counts as Captions / Sections / Sources: score = min(100, round(11*ln(1+captions) + 9*ln(1+sections) + 6.5*ln(1+sources), 1)), then the UI shows that value. " +
     "ln is the natural logarithm; an empty store is 0%.";
+
+  const adminHealthItems = useMemo(() => ([
+    {
+      label: "API service",
+      value: "Connected",
+      tone: "good",
+      detail: "Status endpoint responded successfully."
+    },
+    {
+      label: "Vector store",
+      value: stats.exists ? "Ready" : "Not created",
+      tone: stats.exists ? "good" : "warn",
+      detail: stats.exists ? `${stats.total} embedded chunks available.` : "Index a report to create knowledge.pkl."
+    },
+    {
+      label: "Knowledge index",
+      value: `${knowledgeIndexPct.toFixed(1)}%`,
+      tone: knowledgeIndexPct > 0 ? "good" : "warn",
+      detail: knowledgeIndexDetail
+    },
+    {
+      label: "Generated outputs",
+      value: outputs.length,
+      tone: outputs.length ? "good" : "neutral",
+      detail: outputs.length ? "Files are available for download." : "No generated files yet."
+    }
+  ]), [stats.exists, stats.total, outputs.length, knowledgeIndexPct, knowledgeIndexDetail]);
 
   useEffect(() => {
     refreshStatus();
@@ -242,7 +280,13 @@ function App() {
               <Bell size={18} />
               <span className="badge-dot" style={{position: 'absolute', top: -2, right: -2, width: 8, height: 8, background: '#ef4444', borderRadius: '50%'}}></span>
             </button>
-            <div className="user-profile" onClick={() => setShowAdminPortal(true)}>
+            <div className="user-profile" onClick={() => {
+              if (adminAuthed) {
+                setShowAdminPortal(true);
+              } else {
+                setShowAdminLogin(true);
+              }
+            }}>
               <div className="avatar">A</div>
               <div className="user-info">
                 <strong>Admin User</strong>
@@ -252,53 +296,26 @@ function App() {
           </div>
         </header>
 
-        {showAdminPortal && (
-          <div className="modal-overlay" onClick={() => setShowAdminPortal(false)}>
-            <div className="modal-content pageTransition" onClick={e => e.stopPropagation()}>
-              <div className="modal-header">
-                <h2>Admin Portal</h2>
-                <button className="icon-btn" onClick={() => setShowAdminPortal(false)}>X</button>
-              </div>
-              <div className="modal-body">
-                <section className="modal-section">
-                  <h3>System Version Logs</h3>
-                  <div className="version-list">
-                    <div className="version-item">
-                      <strong>v1.2.0 (Current)</strong>
-                      <ul>
-                        <li>Added Admin Portal and Version Logs</li>
-                        <li>Added Model Accuracy Trend Chart (Recharts)</li>
-                      </ul>
-                    </div>
-                    <div className="version-item">
-                      <strong>v1.1.0</strong>
-                      <ul>
-                        <li>Redesigned UI to dark mode FlowMate dashboard</li>
-                        <li>Added Top Navbar layout with dynamic metrics</li>
-                      </ul>
-                    </div>
-                    <div className="version-item">
-                      <strong>v1.0.0</strong>
-                      <ul>
-                        <li>Initial Release of IEEE Report Studio</li>
-                        <li>Local RAG index, caption, and report generation</li>
-                      </ul>
-                    </div>
-                  </div>
-                </section>
+        {showAdminLogin && !adminAuthed && (
+          <AdminLoginModal
+            onSuccess={() => {
+              setAdminAuthed(true);
+              setShowAdminLogin(false);
+              setShowAdminPortal(true);
+            }}
+            onClose={() => setShowAdminLogin(false)}
+          />
+        )}
 
-                <section className="modal-section auth-instructions">
-                  <h3>Authentication Setup Instructions</h3>
-                  <p>To add a username and password to this application, you need to implement backend authentication. Here is a quick guide:</p>
-                  <ol>
-                    <li><strong>Backend (Flask):</strong> Install <code>Flask-Login</code> or <code>Flask-JWT-Extended</code>. Create a login route (<code>/api/login</code>) that verifies credentials against a local database or <code>.env</code> file.</li>
-                    <li><strong>Frontend (React):</strong> Create a Login page component. If the user is not authenticated, render the Login page instead of the <code>dashboard-layout</code>.</li>
-                    <li><strong>Session:</strong> Store the JWT token in <code>localStorage</code> or HttpOnly cookies, and send it with every <code>fetch</code> request using the <code>Authorization: Bearer &lt;token&gt;</code> header.</li>
-                  </ol>
-                </section>
-              </div>
-            </div>
-          </div>
+        {showAdminPortal && adminAuthed && (
+          <AdminPortal
+            stats={stats}
+            outputs={outputs}
+            sections={sections}
+            healthItems={adminHealthItems}
+            knowledgeIndexPct={knowledgeIndexPct}
+            onClose={() => setShowAdminPortal(false)}
+          />
         )}
 
         <div className="content-area">
@@ -557,6 +574,210 @@ function App() {
           )}
         </div>
       </main>
+    </div>
+  );
+}
+
+function AdminPortal({ stats, outputs, sections, healthItems, knowledgeIndexPct, onClose }) {
+  const latestOutputs = outputs.slice(0, 4);
+  const adminCards = [
+    { label: "Embedded chunks", value: stats.total ?? 0, icon: Database },
+    { label: "Reports on disk", value: stats.reports_on_disk ?? 0, icon: HardDrive },
+    { label: "Output files", value: outputs.length, icon: FileText },
+    { label: "Report sections", value: sections.length, icon: BookOpenText },
+  ];
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="admin-modal pageTransition" role="dialog" aria-modal="true" aria-labelledby="admin-title" onClick={(event) => event.stopPropagation()}>
+        <div className="admin-hero">
+          <div>
+            <p className="eyebrow">Control Center</p>
+            <h2 id="admin-title">Admin Portal</h2>
+            <span>System health, release notes, and local workspace activity.</span>
+          </div>
+          <button className="admin-close" type="button" onClick={onClose} aria-label="Close admin portal">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="admin-body">
+          <section className="admin-grid">
+            {adminCards.map(({ label, value, icon: Icon }) => (
+              <div className="admin-stat" key={label}>
+                <Icon size={18} />
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </section>
+
+          <section className="admin-section">
+            <div className="admin-section-title">
+              <ShieldCheck size={18} />
+              <h3>Health Checks</h3>
+            </div>
+            <div className="health-list">
+              {healthItems.map((item) => (
+                <div className="health-row" key={item.label}>
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{item.detail}</span>
+                  </div>
+                  <b className={`health-badge ${item.tone}`}>{item.value}</b>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="admin-columns">
+            <div className="admin-section">
+              <div className="admin-section-title">
+                <ServerCog size={18} />
+                <h3>Version Logs</h3>
+              </div>
+              <div className="version-list">
+                <VersionItem version="v1.3.0" label="Current" items={[
+                  "Expanded admin portal with live status cards and health checks.",
+                  "Added output and source summaries for faster workspace review."
+                ]} />
+                <VersionItem version="v1.2.0" items={[
+                  "Added admin portal shell and version logs.",
+                  "Added knowledge index trend chart with Recharts."
+                ]} />
+                <VersionItem version="v1.1.0" items={[
+                  "Redesigned the dashboard layout and top navigation.",
+                  "Added dynamic metrics from the Flask status API."
+                ]} />
+              </div>
+            </div>
+
+            <div className="admin-section">
+              <div className="admin-section-title">
+                <Archive size={18} />
+                <h3>Recent Outputs</h3>
+              </div>
+              {latestOutputs.length ? (
+                <div className="admin-output-list">
+                  {latestOutputs.map((file) => (
+                    <a href={`${API_BASE}/api/outputs/${encodeURIComponent(file.name)}`} key={file.name}>
+                      <strong>{file.name}</strong>
+                      <span>{file.size_kb} KB · {file.modified}</span>
+                    </a>
+                  ))}
+                </div>
+              ) : (
+                <p className="empty">Generated captions and reports will appear here.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section">
+            <div className="admin-section-title">
+              <Activity size={18} />
+              <h3>Indexed Sources</h3>
+            </div>
+            {stats.sources?.length ? (
+              <div className="source-table">
+                {stats.sources.map((source) => (
+                  <div className="source-row" key={source.name}>
+                    <strong>{source.name}</strong>
+                    <span>{source.captions} captions</span>
+                    <span>{source.sections} sections</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty">No indexed reports yet. Knowledge index is currently {knowledgeIndexPct.toFixed(1)}%.</p>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdminLoginModal({ onSuccess, onClose }) {
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError]       = useState("");
+  const [loading, setLoading]   = useState(false);
+
+  function handleSubmit(e) {
+    e.preventDefault();
+    setLoading(true);
+    setError("");
+    // Simulate a short auth delay for UX
+    setTimeout(() => {
+      if (email.trim() === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
+        onSuccess();
+      } else {
+        setError("Invalid email or password. Please try again.");
+      }
+      setLoading(false);
+    }, 600);
+  }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="login-modal pageTransition" role="dialog" aria-modal="true" aria-labelledby="login-title" onClick={(e) => e.stopPropagation()}>
+        <div className="login-modal-header">
+          <div className="login-lock-icon">
+            <Lock size={22} />
+          </div>
+          <h2 id="login-title">Admin Access</h2>
+          <p>Enter your credentials to access the Admin Portal.</p>
+          <button className="admin-close" type="button" onClick={onClose} aria-label="Close login">
+            <X size={18} />
+          </button>
+        </div>
+
+        <form className="login-form" onSubmit={handleSubmit}>
+          <label className="login-field">
+            <span>Email</span>
+            <input
+              id="admin-email"
+              type="email"
+              autoComplete="username"
+              required
+              placeholder="local@ieee.org"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </label>
+
+          <label className="login-field">
+            <span>Password</span>
+            <input
+              id="admin-password"
+              type="password"
+              autoComplete="current-password"
+              required
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </label>
+
+          {error && <p className="login-error">{error}</p>}
+
+          <button className="primaryButton login-submit" type="submit" disabled={loading}>
+            {loading ? <Loader2 className="spin" size={18} /> : <Lock size={18} />}
+            {loading ? "Verifying..." : "Sign In"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function VersionItem({ version, label, items }) {
+  return (
+    <div className="version-item">
+      <strong>{version} {label ? <span>{label}</span> : null}</strong>
+      <ul>
+        {items.map((item) => <li key={item}>{item}</li>)}
+      </ul>
     </div>
   );
 }
