@@ -80,8 +80,9 @@ class KnowledgeStore:
         if self._index is None or self._index.ntotal == 0:
             return []
 
-        # Over-fetch when filtering by kind so we have enough after filtering
-        fetch_k = top_k * 4 if kind else top_k
+        # Search the full small index when filtering, so caption-heavy stores
+        # cannot hide the best section matches from report generation.
+        fetch_k = self._index.ntotal if kind else top_k
         fetch_k = min(fetch_k, self._index.ntotal)
 
         q = embed_one(query)

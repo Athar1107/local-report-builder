@@ -106,6 +106,45 @@ def store_stats() -> dict:
     }
 
 
+def prediction_confidence(score: float | None) -> float:
+    """Convert cosine similarity from the FAISS store into a readable 0-100 score."""
+    if score is None:
+        return 0.0
+    return round(max(0.0, min(1.0, float(score))) * 100, 1)
+
+
+def rag_prediction(query: str, kind: str = "section", top_k: int = 5) -> dict:
+    store = load_store()
+    if len(store) == 0:
+        raise ValueError("Knowledge store is empty. Index a previous report first.")
+
+    query = query.strip()
+    if not query:
+        raise ValueError("Enter a query before checking prediction.")
+    if kind not in {"caption", "section"}:
+        raise ValueError("Prediction type must be caption or section.")
+
+    matches = store.retrieve(query, top_k=top_k, kind=kind)
+    top_score = matches[0]["score"] if matches else None
+    return {
+        "query": query,
+        "kind": kind,
+        "prediction": matches[0]["text"] if matches else "",
+        "confidence_pct": prediction_confidence(top_score),
+        "note": "Confidence is retrieval similarity, not supervised model accuracy.",
+        "matches": [
+            {
+                "text": item.get("text", ""),
+                "source": item.get("source", "unknown"),
+                "heading": item.get("heading", ""),
+                "score": round(float(item.get("score", 0.0)), 4),
+                "confidence_pct": prediction_confidence(item.get("score")),
+            }
+            for item in matches
+        ],
+    }
+
+
 def output_files() -> list[dict]:
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     files = []
@@ -154,6 +193,20 @@ def api_home():
 def api_status():
     ensure_dirs()
     return jsonify({"ok": True, "stats": store_stats(), "outputs": output_files(), "sections": SECTION_FIELDS})
+
+
+@app.post("/api/predict")
+def api_predict():
+    ensure_dirs()
+    try:
+        payload = request.get_json(silent=True) or request.form
+        query = payload.get("query", "")
+        kind = payload.get("kind", "section")
+        top_k = int(payload.get("top_k", 5))
+        top_k = max(1, min(top_k, 10))
+        return jsonify({"ok": True, "result": rag_prediction(query, kind, top_k)})
+    except Exception as exc:
+        return api_error(exc)
 
 
 @app.post("/api/index")

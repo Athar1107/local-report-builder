@@ -61,6 +61,8 @@ const defaultSections = [
   ["acknowledgement", "Acknowledgement", "Faculty, sponsors, organisers, and supporters."],
 ];
 
+const LAST_WEEK_KNOWLEDGE_INDEX = 87;
+
 function App() {
   const [showAdminPortal, setShowAdminPortal] = useState(false);
   const [activeTab, setActiveTab] = useState("home");
@@ -69,6 +71,7 @@ function App() {
   const [loading, setLoading] = useState(null);
   const [captionResult, setCaptionResult] = useState(null);
   const [reportResult, setReportResult] = useState(null);
+  const [predictionResult, setPredictionResult] = useState(null);
 
   const sections = status.sections?.length ? status.sections : defaultSections;
   const stats = status.stats || emptyStats();
@@ -88,9 +91,10 @@ function App() {
 
   const accuracyData = useMemo(() => {
     const clamped = Math.min(100, Math.max(0, knowledgeIndexPct));
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    // No time-series is persisted; every point matches the live vector store.
-    return days.map((name) => ({ name, accuracy: Number(clamped.toFixed(1)) }));
+    return [
+      { name: "Last week", accuracy: LAST_WEEK_KNOWLEDGE_INDEX },
+      { name: "Current", accuracy: Number(clamped.toFixed(1)) },
+    ];
   }, [knowledgeIndexPct]);
 
   const knowledgeTrend = useMemo(() => {
@@ -145,6 +149,31 @@ function App() {
       setNotice({ type: "success", text: data.message });
       setStatus((current) => ({ ...current, outputs: data.outputs }));
     });
+  }
+
+  async function handlePredict(event) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    setLoading("predict");
+    setNotice(null);
+    try {
+      const response = await fetch(`${API_BASE}/api/predict`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: form.get("query"),
+          kind: form.get("kind"),
+          top_k: 5,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Request failed.");
+      setPredictionResult(data.result);
+    } catch (error) {
+      setNotice({ type: "error", text: error.message });
+    } finally {
+      setLoading(null);
+    }
   }
 
   async function submitForm(path, form, key, onSuccess) {
@@ -318,7 +347,7 @@ function App() {
                         </linearGradient>
                       </defs>
                       <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} />
-                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} domain={['dataMin - 2', 'dataMax + 2']} tickFormatter={(tick) => `${tick}%`} />
+                      <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} domain={[0, 100]} tickFormatter={(tick) => `${tick}%`} />
                       <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
                       <Tooltip
                         contentStyle={{ backgroundColor: '#151e32', borderColor: '#1e293b', borderRadius: '8px', color: '#f8fafc' }}
@@ -332,6 +361,45 @@ function App() {
               </div>
 
               <div className="dashboard-panels">
+                <div className="dashboard-panel prediction-panel">
+                  <div className="panel-heading">
+                    <Search size={18} className="heading-icon" />
+                    <h2>Prediction & Confidence</h2>
+                  </div>
+                  <form className="prediction-form" onSubmit={handlePredict}>
+                    <input name="query" required placeholder="Try: workshop participants attending technical session" />
+                    <select name="kind" defaultValue="section">
+                      <option value="section">Report section</option>
+                      <option value="caption">Caption</option>
+                    </select>
+                    <SubmitButton loading={loading === "predict"} icon={Search}>Check</SubmitButton>
+                  </form>
+
+                  {predictionResult ? (
+                    <div className="prediction-result">
+                      <div className="confidence-row">
+                        <span>Top confidence</span>
+                        <strong>{predictionResult.confidence_pct.toFixed(1)}%</strong>
+                      </div>
+                      <p>{predictionResult.prediction || "No matching prediction found."}</p>
+                      <div className="match-list">
+                        {predictionResult.matches.map((match, index) => (
+                          <div className="match-row" key={`${match.source}-${index}`}>
+                            <div>
+                              <strong>{match.source}</strong>
+                              <span>{match.heading || predictionResult.kind}</span>
+                            </div>
+                            <b>{match.confidence_pct.toFixed(1)}%</b>
+                          </div>
+                        ))}
+                      </div>
+                      <small>{predictionResult.note}</small>
+                    </div>
+                  ) : (
+                    <p className="empty">Run a query to see the nearest RAG prediction and similarity score.</p>
+                  )}
+                </div>
+
                 <div className="dashboard-panel">
                   <div className="panel-heading">
                     <Activity size={18} className="heading-icon" />

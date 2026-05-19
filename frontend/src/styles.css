@@ -488,7 +488,7 @@ body {
 
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field span { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }
-input, textarea {
+input, textarea, select {
   background: var(--bg-main);
   border: 1px solid var(--border);
   color: var(--text-main);
@@ -497,8 +497,86 @@ input, textarea {
   font-family: inherit;
   outline: none;
 }
-input:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
+input:focus, textarea:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
 textarea { min-height: 120px; resize: vertical; }
+
+.prediction-panel {
+  grid-column: 1 / -1;
+}
+
+.prediction-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 170px auto;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.prediction-result {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.confidence-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.confidence-row strong {
+  color: var(--success);
+  font-size: 1.4rem;
+}
+
+.prediction-result p {
+  margin: 0 0 16px;
+  color: var(--text-main);
+  line-height: 1.5;
+}
+
+.match-list {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.match-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-main);
+}
+
+.match-row div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.match-row strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-row span,
+.prediction-result small {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.match-row b {
+  color: var(--primary-light);
+  flex-shrink: 0;
+}
 
 .dropzone {
   display: flex;
@@ -658,6 +736,7 @@ textarea { min-height: 120px; resize: vertical; }
   .search-bar { width: 100%; }
   .content-area { padding: 16px; }
   .splitForm, .sectionGrid { grid-template-columns: 1fr; }
+  .prediction-form { grid-template-columns: 1fr; }
   .resultGrid { grid-template-columns: 1fr; }
   .libraryGrid { grid-template-columns: 1fr; }
   .metrics-grid { grid-template-columns: 1fr; }

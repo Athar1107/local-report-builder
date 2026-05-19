@@ -16,7 +16,7 @@ from .config import EMBED_MODEL
 @lru_cache(maxsize=1)
 def _model() -> SentenceTransformer:
     """Load once, cache for the process lifetime."""
-    return SentenceTransformer(EMBED_MODEL)
+    return SentenceTransformer(EMBED_MODEL, local_files_only=True)
 
 
 def embed(texts: list[str]) -> np.ndarray:
