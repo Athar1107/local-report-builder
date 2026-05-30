@@ -53,7 +53,7 @@ ieee_report_gen/
 │   ├── report_generator.py    ← RAG + llama3 → report sections
 │   └── report_builder.py      ← Assembles sections into formatted DOCX
 │
-├── data/
+├── data/ 
 │   ├── reports/               ← Drop previous-year PDFs / DOCX here
 │   └── images/                ← Drop new event images here
 │
