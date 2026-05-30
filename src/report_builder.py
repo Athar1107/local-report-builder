@@ -19,13 +19,14 @@ import re
 from datetime import datetime
 from pathlib  import Path
 
+import fitz
 from docx                   import Document
 from docx.shared            import Pt, RGBColor, Inches, Cm
 from docx.enum.text         import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns           import qn
 from docx.oxml              import OxmlElement
 
-from .config import OUTPUTS_DIR
+from .config import DOCS_OUTPUT_DIR, OUTPUTS_DIR, PDF_OUTPUT_DIR
 
 
 # ── Colours ────────────────────────────────────────────────────────────────────
@@ -34,6 +35,10 @@ DARK_GREY  = RGBColor(0x22, 0x22, 0x22)
 MID_GREY   = RGBColor(0x44, 0x44, 0x44)
 LIGHT_GREY = RGBColor(0x88, 0x88, 0x88)
 IEEE_BLUE  = RGBColor(0x00, 0x33, 0x99)
+
+PDF_BLACK = (0, 0, 0)
+PDF_GREY = (0.28, 0.28, 0.28)
+PDF_LIGHT_GREY = (0.65, 0.65, 0.65)
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -310,13 +315,130 @@ def build_docx(
     # ════════════════════════════════════════════════════════════════════════
     # SAVE
     # ════════════════════════════════════════════════════════════════════════
-    OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
+    DOCS_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     if output_path is None:
         safe  = "".join(c if c.isalnum() or c in " _-" else "_"
                         for c in event_name).strip().replace(" ", "_")
         ts    = datetime.now().strftime("%Y%m%d_%H%M")
-        output_path = str(OUTPUTS_DIR / f"{safe}_{ts}.docx")
+        output_path = str(DOCS_OUTPUT_DIR / f"{safe}_{ts}.docx")
 
     doc.save(output_path)
+    return Path(output_path)
+
+
+def _safe_output_stem(event_name: str) -> str:
+    safe = "".join(c if c.isalnum() or c in " _-" else "_" for c in event_name)
+    return safe.strip().replace(" ", "_") or "event_report"
+
+
+def _plain_section_lines(text: str) -> list[str]:
+    return [line.strip().lstrip("•-* ").strip() for line in text.splitlines() if line.strip()]
+
+
+def _pdf_add_textbox(page, rect, text, *, fontsize=11, bold=False, color=PDF_BLACK, align=0) -> float:
+    fontname = "Helvetica-Bold" if bold else "Helvetica"
+    spare = page.insert_textbox(
+        rect,
+        text,
+        fontsize=fontsize,
+        fontname=fontname,
+        color=color,
+        align=align,
+    )
+    used = rect.height - max(spare, 0)
+    return max(used, fontsize + 4)
+
+
+def build_pdf(
+    event_name: str,
+    sections: dict,
+    output_path: str = None,
+) -> Path:
+    """
+    Build a simple formal PDF report from the same generated report sections.
+    """
+    PDF_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    if output_path is None:
+        ts = datetime.now().strftime("%Y%m%d_%H%M")
+        output_path = str(PDF_OUTPUT_DIR / f"{_safe_output_stem(event_name)}_{ts}.pdf")
+
+    doc = fitz.open()
+    width, height = 595, 842
+    margin_x = 70
+    margin_top = 68
+    margin_bottom = 64
+    line_gap = 8
+    y = margin_top
+
+    def new_page():
+        return doc.new_page(width=width, height=height)
+
+    page = new_page()
+
+    def ensure_space(required: float):
+        nonlocal page, y
+        if y + required > height - margin_bottom:
+            page = new_page()
+            y = margin_top
+
+    def add_text(text: str, *, fontsize=11, bold=False, color=PDF_BLACK, align=0, after=6):
+        nonlocal y
+        if not text.strip():
+            return
+        ensure_space(fontsize * 3)
+        rect = fitz.Rect(margin_x, y, width - margin_x, height - margin_bottom)
+        used = _pdf_add_textbox(page, rect, text.strip(), fontsize=fontsize, bold=bold, color=color, align=align)
+        y += used + after
+
+    add_text("A REPORT ON", fontsize=12, color=PDF_GREY, align=1, after=8)
+    add_text(event_name, fontsize=18, bold=True, align=1, after=18)
+
+    about_raw = sections.get("about_the_event", "")
+    meta, _ = _parse_session_meta(about_raw)
+    for label in ("Date", "Venue"):
+        value = next((v for k, v in meta if k.lower() == label.lower()), "")
+        if value:
+            add_text(f"{label}: {value}", fontsize=11, bold=True, align=2, after=3)
+
+    add_text("-" * 86, fontsize=8, color=PDF_LIGHT_GREY, align=1, after=12)
+
+    section_order = [
+        ("introduction", "Introduction"),
+        ("about_the_speaker", "About the Speaker"),
+        ("about_the_event", "About the Session"),
+        ("conclusion", "Conclusion"),
+        ("sdg_impact", "SDG Impact"),
+        ("ieee_goals", "IEEE Goals and Vision Achieved"),
+        ("acknowledgement", "Acknowledgement"),
+    ]
+
+    for key, heading in section_order:
+        text = sections.get(key, "").strip()
+        if not text:
+            continue
+
+        ensure_space(70)
+        add_text(f"{heading}:", fontsize=12, bold=True, after=4)
+
+        if key == "about_the_event":
+            meta, body_lines = _parse_session_meta(text)
+            for label, value in meta:
+                add_text(f"{label}: {value}", fontsize=11, bold=True, after=2)
+            for line in body_lines:
+                add_text(line, fontsize=11, after=5)
+            continue
+
+        if key in {"about_the_speaker", "sdg_impact", "ieee_goals"}:
+            for line in _plain_section_lines(text):
+                add_text(f"- {line}", fontsize=11, after=3)
+            y += line_gap
+            continue
+
+        for line in _plain_section_lines(text):
+            add_text(line, fontsize=11, after=5)
+
+    doc.save(output_path)
+    doc.close()
     return Path(output_path)

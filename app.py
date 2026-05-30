@@ -13,10 +13,18 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.caption_generator import generate_captions
-from src.config import DATA_DIR, IMAGES_DIR, OUTPUTS_DIR, REPORTS_DIR, VECTOR_STORE_PATH
+from src.config import (
+    DATA_DIR,
+    DOCS_OUTPUT_DIR,
+    IMAGES_DIR,
+    OUTPUTS_DIR,
+    PDF_OUTPUT_DIR,
+    REPORTS_DIR,
+    VECTOR_STORE_PATH,
+)
 from src.image_handler import get_image_info, validate_image
 from src.indexer import index_report
-from src.report_builder import build_docx
+from src.report_builder import build_docx, build_pdf
 from src.report_generator import generate_full_report
 from src.vector_store import KnowledgeStore
 
@@ -42,7 +50,15 @@ SECTION_FIELDS = [
 
 
 def ensure_dirs() -> None:
-    for path in (DATA_DIR, REPORTS_DIR, IMAGES_DIR, OUTPUTS_DIR, VECTOR_STORE_PATH.parent):
+    for path in (
+        DATA_DIR,
+        REPORTS_DIR,
+        IMAGES_DIR,
+        OUTPUTS_DIR,
+        DOCS_OUTPUT_DIR,
+        PDF_OUTPUT_DIR,
+        VECTOR_STORE_PATH.parent,
+    ):
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -148,11 +164,16 @@ def rag_prediction(query: str, kind: str = "section", top_k: int = 5) -> dict:
 def output_files() -> list[dict]:
     OUTPUTS_DIR.mkdir(parents=True, exist_ok=True)
     files = []
-    for path in sorted(OUTPUTS_DIR.iterdir(), key=lambda item: item.stat().st_mtime, reverse=True):
+    for path in sorted(OUTPUTS_DIR.rglob("*"), key=lambda item: item.stat().st_mtime, reverse=True):
         if not path.is_file():
             continue
+        if path.name == ".gitkeep":
+            continue
+        relative_name = path.relative_to(OUTPUTS_DIR).as_posix()
         files.append({
-            "name": path.name,
+            "name": relative_name,
+            "display_name": path.name,
+            "folder": path.parent.relative_to(OUTPUTS_DIR).as_posix() if path.parent != OUTPUTS_DIR else "",
             "size_kb": max(1, round(path.stat().st_size / 1024)),
             "modified": datetime.fromtimestamp(path.stat().st_mtime).strftime("%d %b %Y, %I:%M %p"),
         })
@@ -267,8 +288,11 @@ def api_report_document():
     ensure_dirs()
     event_name = request.form.get("event", "").strip()
     session_points = request.form.get("session_points", "").strip()
+    output_format = request.form.get("output_format", "docx").strip().lower()
     if not event_name:
         return api_error(ValueError("Add an event name before generating a report."))
+    if output_format not in {"docx", "pdf"}:
+        return api_error(ValueError("Choose DOCX or PDF as the output format."))
 
     event_details = {"title": event_name, "session_points": session_points}
     for key, _label, _help in SECTION_FIELDS:
@@ -283,11 +307,15 @@ def api_report_document():
             raise ValueError("Knowledge store is empty. Index a previous report first.")
 
         generated = generate_full_report(event_details, store)
-        out_path = build_docx(event_name=event_name, sections=generated)
+        if output_format == "pdf":
+            out_path = build_pdf(event_name=event_name, sections=generated)
+        else:
+            out_path = build_docx(event_name=event_name, sections=generated)
+        output_name = out_path.relative_to(OUTPUTS_DIR).as_posix()
         return jsonify({
             "ok": True,
             "message": f"Report generated: {out_path.name}",
-            "result": {"file": out_path.name, "sections": generated},
+            "result": {"file": output_name, "display_name": out_path.name, "format": output_format, "sections": generated},
             "outputs": output_files(),
         })
     except Exception as exc:

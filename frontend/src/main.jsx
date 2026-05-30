@@ -72,6 +72,10 @@ const LAST_WEEK_KNOWLEDGE_INDEX = 87;
 const ADMIN_EMAIL    = "local@ieee.org";
 const ADMIN_PASSWORD = "IEEE";
 
+function outputUrl(name) {
+  return `${API_BASE}/api/outputs/${String(name).split("/").map(encodeURIComponent).join("/")}`;
+}
+
 function App() {
   const [showAdminPortal, setShowAdminPortal] = useState(false);
   const [showAdminLogin, setShowAdminLogin]   = useState(false);
@@ -449,8 +453,8 @@ function App() {
                       <div className="list-item log-item" key={out.name}>
                         <div className="log-dot"></div>
                         <div className="item-info">
-                          <strong>Generated file: {out.name}</strong>
-                          <span>{out.modified} · <a href={`${API_BASE}/api/outputs/${encodeURIComponent(out.name)}`} className="download-link">Download</a></span>
+                          <strong>Generated file: {out.display_name || out.name}</strong>
+                          <span>{out.modified} · <a href={outputUrl(out.name)} className="download-link">Download</a></span>
                         </div>
                       </div>
                     )) : (
@@ -505,8 +509,23 @@ function App() {
           )}
 
           {activeTab === "report" && (
-            <Panel eyebrow="Step 2B" title="Full Event Report" badge="Auto DOCX">
-              <form className="reportForm" onSubmit={handleReport}>
+            <Panel
+              eyebrow="Step 2B"
+              title="Full Event Report"
+              badge={(
+                <select
+                  className="panelFormatSelect"
+                  name="output_format"
+                  form="report-form"
+                  defaultValue="docx"
+                  aria-label="Output format"
+                >
+                  <option value="docx">DOCX</option>
+                  <option value="pdf">PDF</option>
+                </select>
+              )}
+            >
+              <form id="report-form" className="reportForm" onSubmit={handleReport}>
                 <Field label="Event name" wide>
                   <input name="event" required placeholder="IEEE Student Branch Induction 2024" />
                 </Field>
@@ -525,14 +544,14 @@ function App() {
                   />
                 </Field>
 
-                <SubmitButton loading={loading === "report"} icon={FileText}>Generate DOCX</SubmitButton>
+                <SubmitButton loading={loading === "report"} icon={FileText}>Generate Report</SubmitButton>
               </form>
 
               {reportResult && (
                 <div className="downloadCard">
                   <CheckCircle2 size={20} />
-                  <strong>{reportResult.file}</strong>
-                  <a href={`${API_BASE}/api/outputs/${encodeURIComponent(reportResult.file)}`}>
+                  <strong>{reportResult.display_name || reportResult.file}</strong>
+                  <a href={outputUrl(reportResult.file)}>
                     <Download size={17} />
                     Download
                   </a>
@@ -565,9 +584,9 @@ function App() {
                   {outputs.length ? (
                     <div className="rowList">
                       {outputs.map((file) => (
-                        <a className="libraryRow outputLink" href={`${API_BASE}/api/outputs/${encodeURIComponent(file.name)}`} key={file.name}>
-                          <strong>{file.name}</strong>
-                          <span>{file.size_kb} KB · {file.modified}</span>
+                        <a className="libraryRow outputLink" href={outputUrl(file.name)} key={file.name}>
+                          <strong>{file.display_name || file.name}</strong>
+                          <span>{file.folder ? `${file.folder} · ` : ""}{file.size_kb} KB · {file.modified}</span>
                         </a>
                       ))}
                     </div>
@@ -666,9 +685,9 @@ function AdminPortal({ stats, outputs, sections, healthItems, knowledgeIndexPct,
               {latestOutputs.length ? (
                 <div className="admin-output-list">
                   {latestOutputs.map((file) => (
-                    <a href={`${API_BASE}/api/outputs/${encodeURIComponent(file.name)}`} key={file.name}>
-                      <strong>{file.name}</strong>
-                      <span>{file.size_kb} KB · {file.modified}</span>
+                    <a href={outputUrl(file.name)} key={file.name}>
+                      <strong>{file.display_name || file.name}</strong>
+                      <span>{file.folder ? `${file.folder} · ` : ""}{file.size_kb} KB · {file.modified}</span>
                     </a>
                   ))}
                 </div>

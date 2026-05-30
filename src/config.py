@@ -13,6 +13,8 @@ REPORTS_DIR       = DATA_DIR / "reports"
 IMAGES_DIR        = DATA_DIR / "images"
 VECTOR_STORE_DIR  = BASE_DIR / "vector_store"
 OUTPUTS_DIR       = BASE_DIR / "outputs"
+DOCS_OUTPUT_DIR   = OUTPUTS_DIR / "docs"
+PDF_OUTPUT_DIR    = OUTPUTS_DIR / "pdf"
 VECTOR_STORE_PATH = VECTOR_STORE_DIR / "knowledge.pkl"
 
 # Ollama models

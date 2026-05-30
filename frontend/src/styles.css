@@ -485,6 +485,22 @@ body {
 .panelHeader h2 { margin: 0; font-size: 1.4rem; color: var(--text-main); }
 .eyebrow { color: var(--primary-light); font-size: 0.8rem; font-weight: 700; text-transform: uppercase; margin-bottom: 8px; }
 .panelBadge { background: var(--primary-glow); color: var(--primary-light); padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+.panelFormatSelect {
+  min-width: 118px;
+  height: 48px;
+  padding: 0 34px 0 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  background: var(--primary-glow);
+  color: var(--primary-light);
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.panelFormatSelect:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-glow);
+}
 
 .field { display: flex; flex-direction: column; gap: 8px; }
 .field span { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); }

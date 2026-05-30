@@ -10,6 +10,11 @@ frontend/*.log
 data/images/*
 data/reports/*
 outputs/*
+!outputs/.gitkeep
+!outputs/docs/
+!outputs/docs/.gitkeep
+!outputs/pdf/
+!outputs/pdf/.gitkeep
 vector_store/*
 frontend-preview.png
 
