@@ -266,15 +266,16 @@ def api_caption_image():
 def api_report_document():
     ensure_dirs()
     event_name = request.form.get("event", "").strip()
+    session_points = request.form.get("session_points", "").strip()
     if not event_name:
         return api_error(ValueError("Add an event name before generating a report."))
 
-    event_details = {"title": event_name}
+    event_details = {"title": event_name, "session_points": session_points}
     for key, _label, _help in SECTION_FIELDS:
         event_details[key] = request.form.get(key, "").strip()
 
-    if not any(value for key, value in event_details.items() if key != "title"):
-        return api_error(ValueError("Add details to at least one report section."))
+    if not session_points and not any(value for key, value in event_details.items() if key not in {"title", "session_points"}):
+        return api_error(ValueError("Add the session points before generating a report."))
 
     try:
         store = load_store()

@@ -505,19 +505,25 @@ function App() {
           )}
 
           {activeTab === "report" && (
-            <Panel eyebrow="Step 2B" title="Full Event Report" badge="DOCX output">
+            <Panel eyebrow="Step 2B" title="Full Event Report" badge="Auto DOCX">
               <form className="reportForm" onSubmit={handleReport}>
                 <Field label="Event name" wide>
                   <input name="event" required placeholder="IEEE Student Branch Induction 2024" />
                 </Field>
 
-                <div className="sectionGrid">
-                  {sections.map(([key, label, help]) => (
-                    <Field label={label} key={key}>
-                      <textarea name={key} rows="5" placeholder={help} />
-                    </Field>
-                  ))}
-                </div>
+                <Field label="Session points" wide>
+                  <textarea
+                    name="session_points"
+                    rows="14"
+                    required
+                    placeholder={`Paste the complete event notes here:
+- Date, time, venue, and participant count
+- Speaker name, role, and topic
+- Opening ceremony and welcome address
+- Main sessions, activities, demonstrations, or competitions
+- Outcomes, student response, SDG impact, IEEE goals, and acknowledgements`}
+                  />
+                </Field>
 
                 <SubmitButton loading={loading === "report"} icon={FileText}>Generate DOCX</SubmitButton>
               </form>

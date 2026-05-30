@@ -67,7 +67,18 @@ Rules:
 """
 
 # Optional sections — skipped entirely if the user provides no content
-OPTIONAL_SECTIONS = {"about_the_speaker", "sdg_impact", "ieee_goals", "acknowledgement"}
+OPTIONAL_SECTIONS = {"sdg_impact", "ieee_goals", "acknowledgement"}
+CORE_SECTIONS = {"introduction", "about_the_speaker", "about_the_event", "description", "conclusion"}
+
+OPTIONAL_SECTION_KEYWORDS = {
+    "about_the_speaker": (
+        "speaker", "resource person", "guest", "expert", "trainer", "mentor",
+        "professor", "prof.", "dr.", "mr.", "mrs.", "ms.",
+    ),
+    "sdg_impact": ("sdg", "sustainable development", "sustainability", "goal "),
+    "ieee_goals": ("ieee goal", "ieee vision", "ieee mission", "technical awareness", "professional development"),
+    "acknowledgement": ("acknowledge", "acknowledgement", "thanks", "gratitude", "sponsor", "faculty coordinator"),
+}
 
 
 # ── Helper ─────────────────────────────────────────────────────────────────────
@@ -81,6 +92,25 @@ def _ollama_text(prompt: str, model: str = TEXT_MODEL) -> str:
         return resp["message"]["content"].strip()
     except Exception as e:
         raise ConnectionError(f"Ollama not running. (ollama serve)\n{e}")
+
+
+def _should_use_session_points(section_key: str, session_points: str) -> bool:
+    if not session_points:
+        return False
+    if section_key in CORE_SECTIONS:
+        return True
+    text = session_points.lower()
+    return any(keyword in text for keyword in OPTIONAL_SECTION_KEYWORDS.get(section_key, ()))
+
+
+def _section_facts_from_session_points(section_name: str, session_points: str) -> str:
+    return (
+        f"Event notes supplied by the organiser:\n{session_points}\n\n"
+        f"Use these notes to write only the '{section_name}' section. "
+        "Select the relevant facts for this section, keep the chronology clear, "
+        "and do not add names, dates, numbers, outcomes, SDGs, or acknowledgements "
+        "that are not present in the notes."
+    )
 
 
 # ── Main functions ─────────────────────────────────────────────────────────────
@@ -146,7 +176,7 @@ def generate_full_report(
                         e.g. {
                           "title":               "IEEE Student Branch Induction 2024",
                           "introduction":        "The event was held on 10th March…",
-                          "about_the_speaker":   "Dr. Mehta, Professor of ECE…",  # optional
+                          "about_the_speaker":   "Dr. Mehta, Professor of ECE…",
                           "about_the_event":     "Date: 10 March 2024, Venue: …",
                           "description":         "The event commenced at 10:00 AM…",
                           "results_and_outcomes":"82 students were inducted…",     # optional
@@ -173,9 +203,12 @@ def generate_full_report(
     }
 
     generated = {}
+    session_points = event_details.get("session_points", "").strip()
 
     for section_key, display_name in display_names.items():
         user_facts = event_details.get(section_key, "").strip()
+        if not user_facts and section_key != "title" and _should_use_session_points(section_key, session_points):
+            user_facts = _section_facts_from_session_points(display_name, session_points)
 
         # Skip optional sections if no content provided
         if not user_facts and section_key in OPTIONAL_SECTIONS:
